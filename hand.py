@@ -13,10 +13,43 @@ SERVO_PINS = [16, 17, 18, 19]
 # Frecuencia PWM
 PWM_FREQ = 50  # 50 Hz (período de 20 ms)
 
-
 STOP = 76  #73-79      
-FORWARD_MAX = 132  
-REVERSE_MAX = 21
+FORWARD_MAX = 128  
+REVERSE_MAX = 25
+
+# Página HTML con botones para controlar los servos
+HTML_PAGE = """<!DOCTYPE html>
+<html>
+<head>
+    <title>Control de Servos</title>
+    <style>
+        body {{ font-family: Arial, sans-serif; text-align: center; }}
+        .servo {{ margin: 20px; }}
+        button {{ padding: 10px 20px; margin: 5px; }}
+    </style>
+</head>
+<body>
+    {response}
+    <h1>Control de Servos</h1>
+    {buttons}
+</body>
+</html>
+"""
+
+def generar_botones_html():
+    botones = ""
+    for i in range(len(SERVO_PINS)):
+        botones += f"""
+        <div class="servo">
+            <h2>Servo {i}</h2>
+            <button onclick="location.href='/?servo={i}&speed=100'">Avanzar</button>
+            <button onclick="location.href='/?servo={i}&speed=100&s_time=100'">Avanzar 15°</button>
+            <button onclick="location.href='/?servo={i}&speed=0'">Detener</button>
+            <button onclick="location.href='/?servo={i}&speed=-100&s_time=100'">Retroceder 15°</button>
+            <button onclick="location.href='/?servo={i}&speed=-100'">Retroceder</button>
+        </div>
+        """
+    return botones
 
 def inicializar_servos():
     servos = []
@@ -47,8 +80,8 @@ def configurar_servidor():
     print('Servidor escuchando en', addr)
     return s
 
-def set_servo_speed(servo, speed, s_time = 0):
-    if not(-100 <= speed <= 100):
+def set_servo_speed(servo, speed, s_time=0):
+    if not (-100 <= speed <= 100):
         speed = min(max(speed, -100), 100)
     if speed > 0:
         servo_speed = STOP + (FORWARD_MAX - STOP) * speed / 100
@@ -57,13 +90,12 @@ def set_servo_speed(servo, speed, s_time = 0):
     else:
         servo_speed = STOP  # Detener el servo
     servo.duty(int(servo_speed))
-    if s_time >= 50:
+    if s_time > 0:
         time.sleep_ms(s_time)
         servo.duty(STOP)  # Detener el servo después del tiempo especificado
         print(f"Servo {servo} ajustado a velocidad {servo_speed} por: {s_time} ms)")
     else:
         print(f"Servo {servo} ajustado a velocidad {servo_speed}")
-
 
 def manejar_solicitud(cl):
     print('Manejando solicitud...')
@@ -89,7 +121,7 @@ def manejar_solicitud(cl):
             response = 'Formato de solicitud inválido\n'
     except Exception as e:
         response = f'Error al procesar la solicitud: {e}\n'
-    print (response)
+    print(response)
     return response, servo_index, speed, s_time
 
 def respond_web(response, cl):
@@ -98,12 +130,13 @@ def respond_web(response, cl):
     cl.close()
 
 def main_loop():
-
     servos = inicializar_servos()
     # Conectarse a Wi-Fi
     conectar_wifi()
     # Configurar el servidor
     servidor = configurar_servidor()
+    # Generar la página HTML con botones
+    
     # Bucle principal para aceptar conexiones
     while True:
         try:
@@ -113,10 +146,10 @@ def main_loop():
             response, servo_index, speed, s_time = manejar_solicitud(cl)
             if 0 <= servo_index < len(servos):
                 set_servo_speed(servos[servo_index], speed, s_time)
-                respond_web(response, cl)
+                #respond_web(response, cl)
+                respond_web(HTML_PAGE.format(buttons=generar_botones_html(), response=response), cl)
             else:
                 respond_web(f"Índice de servo inválido {servo_index}", cl)
-
         except Exception as e:
             print('Error en el servidor:', e)
             time.sleep(1)  # Evita bucles rápidos en caso de error
