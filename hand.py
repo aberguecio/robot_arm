@@ -14,8 +14,8 @@ SERVO_PINS = [16, 17, 18, 19]
 PWM_FREQ = 50  # 50 Hz (período de 20 ms)
 
 STOP = 76  #73-79      
-FORWARD_MAX = 128  
-REVERSE_MAX = 25
+FORWARD_MAX = [128,96,91,128]
+REVERSE_MAX = [25,50,60,25]
 
 # Página HTML con botones para controlar los servos
 HTML_PAGE = """<!DOCTYPE html>
@@ -43,9 +43,9 @@ def generar_botones_html():
         <div class="servo">
             <h2>Servo {i}</h2>
             <button onclick="location.href='/?servo={i}&speed=100'">Avanzar</button>
-            <button onclick="location.href='/?servo={i}&speed=100&s_time=100'">Avanzar 15°</button>
+            <button onclick="location.href='/?servo={i}&speed=50&s_time=200'">Avanzar 15°</button>
             <button onclick="location.href='/?servo={i}&speed=0'">Detener</button>
-            <button onclick="location.href='/?servo={i}&speed=-100&s_time=100'">Retroceder 15°</button>
+            <button onclick="location.href='/?servo={i}&speed=-50&s_time=200'">Retroceder 15°</button>
             <button onclick="location.href='/?servo={i}&speed=-100'">Retroceder</button>
         </div>
         """
@@ -80,16 +80,52 @@ def configurar_servidor():
     print('Servidor escuchando en', addr)
     return s
 
-def set_servo_speed(servo, speed, s_time=0):
+def set_speed(servo_index, speed):
     if not (-100 <= speed <= 100):
         speed = min(max(speed, -100), 100)
     if speed > 0:
-        servo_speed = STOP + (FORWARD_MAX - STOP) * speed / 100
+        servo_speed = STOP + (FORWARD_MAX[servo_index] - STOP) * speed / 100
     elif speed < 0:
-        servo_speed = STOP + (STOP - REVERSE_MAX) * speed / 100
+        servo_speed = STOP + (STOP - REVERSE_MAX[servo_index]) * speed / 100
     else:
         servo_speed = STOP  # Detener el servo
+    return servo_speed
+
+def inverse_speed(servo_index, duty):
+    if duty > STOP: 
+        speed = 100 * (duty - STOP) / (FORWARD_MAX[servo_index] - STOP)
+    elif duty < STOP:
+        speed = 100 * (duty - STOP) / (STOP - REVERSE_MAX[servo_index])
+    else:
+        speed = 0
+    return speed
+
+def set_servo_speed(servos, servo_index, speed, s_time=0):
+    if not (-100 <= speed <= 100):
+        speed = min(max(speed, -100), 100)
+    servo_speed = set_speed(servo_index, speed)
+
+    if servo_index == 1 and speed < -60:
+        min_position = -2 * speed - 210
+        position_s2 = inverse_speed(2, servos[2].duty())
+        print(f"Posicion s2: {position_s2}")
+        position_s2 = max(position_s2, min_position)
+        servo_position_s2 = set_speed(2, position_s2)
+        servos[2].duty(int(servo_position_s2))
+        print(f"Servo 2 ajustado a pocicion {position_s2}")
+
+    elif servo_index == 2 and speed < -20:
+        min_position = -speed / 2 - 100
+        position_s1 = inverse_speed(1, servos[1].duty())
+        print(f"Posicion s1: {position_s1}")
+        position_s1 = max(position_s1, min_position)
+        servo_position_s1 = set_speed(1, position_s1)
+        servos[1].duty(int(servo_position_s1))
+        print(f"Servo 1 ajustado a pocicion {position_s1}")
+    
+    servo = servos[servo_index]
     servo.duty(int(servo_speed))
+
     if s_time > 0:
         time.sleep_ms(s_time)
         servo.duty(STOP)  # Detener el servo después del tiempo especificado
@@ -145,7 +181,7 @@ def main_loop():
             print('Cliente conectado desde', addr)
             response, servo_index, speed, s_time = manejar_solicitud(cl)
             if 0 <= servo_index < len(servos):
-                set_servo_speed(servos[servo_index], speed, s_time)
+                set_servo_speed(servos, servo_index, speed, s_time)
                 #respond_web(response, cl)
                 respond_web(HTML_PAGE.format(buttons=generar_botones_html(), response=response), cl)
             else:
