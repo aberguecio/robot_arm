@@ -23,6 +23,11 @@ try:
         import hand
         led_blink(2)
         hand.main_loop()
+    elif program_name == "camera":
+        import esp_cam
+        led_blink(3)
+        esp_cam.main_loop()
+
 
 except Exception as e:
     print("An error occurred:\n", str(e))

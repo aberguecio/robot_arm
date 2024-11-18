@@ -8,7 +8,8 @@ SSID = 'RED-BERGUECIO-2.4G'
 PASSWORD = 'Colchagua81'
 
 # Pines GPIO conectados a los servos
-SERVO_PINS = [16, 17, 18, 19]
+SERVO_PINS = [16, 17, 18]
+MOTOR_PIN_FORWARD = 19
 
 # Frecuencia PWM
 PWM_FREQ = 50  # 50 Hz (período de 20 ms)
@@ -36,19 +37,61 @@ HTML_PAGE = """<!DOCTYPE html>
 </html>
 """
 
+
+MOTOR_PWM_FORWARD = PWM(Pin(MOTOR_PIN_FORWARD))
+MOTOR_PWM_FORWARD.freq(500)
+
+def set_motor_speed(speed, s_time=0):
+    """Controla la velocidad del motor mediante un puente H usando PWM."""
+    speed = min(max(speed, -100), 100)
+
+    if speed > 0:
+        # Control de avance con PWM
+        duty_cycle = int((speed / 100) * 1023)  # Convierte a valor de duty cycle (0-1023)
+        MOTOR_PWM_FORWARD.duty(duty_cycle)
+    else:
+        # Detener el motor
+        MOTOR_PWM_FORWARD.duty(0)
+
+    if s_time > 0:
+        time.sleep_ms(s_time)
+        # Detener el motor después del tiempo especificado
+        MOTOR_PWM_FORWARD.duty(0)
+        print(f"Motor ajustado a velocidad {speed} durante {s_time} ms")
+    else:
+        print(f"Motor ajustado a velocidad {speed}")
+
 def generar_botones_html():
     botones = ""
-    for i in range(len(SERVO_PINS)):
+    botones += f"""
+        <div class="servo">
+            <h2>Servo 0</h2>
+            <button onclick="location.href='/?servo=0&speed=50&s_time=500'">Avanzar 0,5</button>
+            <button onclick="location.href='/?servo=0&speed=50&s_time=200'">Avanzar 0,2s</button>
+            <button onclick="location.href='/?servo=0&speed=0'">Detener</button>
+            <button onclick="location.href='/?servo=0&speed=-50&s_time=200'">Retroceder 0,2s</button>
+            <button onclick="location.href='/?servo=0&speed=-50&s_time=500'">Retroceder 0,5</button>
+        </div>
+        """
+    for i in range(1,3):
         botones += f"""
         <div class="servo">
             <h2>Servo {i}</h2>
-            <button onclick="location.href='/?servo={i}&speed=100'">Avanzar</button>
-            <button onclick="location.href='/?servo={i}&speed=50&s_time=200'">Avanzar 15°</button>
-            <button onclick="location.href='/?servo={i}&speed=0'">Detener</button>
-            <button onclick="location.href='/?servo={i}&speed=-50&s_time=200'">Retroceder 15°</button>
-            <button onclick="location.href='/?servo={i}&speed=-100'">Retroceder</button>
+        """
+        for j in range(-100,120,20):
+            botones += f"""<button onclick="location.href='/?servo={i}&speed={j}'">Avanzar {j}</button>"""
+        botones += f"""
         </div>
         """
+    botones += f"""
+    <div class="motor">
+        <h2>Motor</h2>
+        <button onclick="location.href='/?servo=3&speed=100'">Bombear</button>
+        <button onclick="location.href='/?servo=3&speed=50'">Bombeo leve</button>
+        <button onclick="location.href='/?servo=3&speed=50&s_time=1000'">Bombeo leve 1s</button>
+        <button onclick="location.href='/?servo=3&speed=0'">Detener</button>
+    </div>
+    """
     return botones
 
 def inicializar_servos():
@@ -183,6 +226,9 @@ def main_loop():
             if 0 <= servo_index < len(servos):
                 set_servo_speed(servos, servo_index, speed, s_time)
                 #respond_web(response, cl)
+                respond_web(HTML_PAGE.format(buttons=generar_botones_html(), response=response), cl)
+            elif servo_index == 3:
+                set_motor_speed(speed, s_time)
                 respond_web(HTML_PAGE.format(buttons=generar_botones_html(), response=response), cl)
             else:
                 respond_web(f"Índice de servo inválido {servo_index}", cl)
